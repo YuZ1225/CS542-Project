@@ -1,0 +1,173 @@
+# =============================================================================
+#
+# CS542 Project - Digaai - Logistic Regression Classification
+#
+# Author: Federico Siano
+#
+# Date: Oct 27 2018
+#
+# Only First Names used as training features
+# 
+# =============================================================================
+
+
+import os
+import pandas as pd
+import numpy as np
+import numpy.ma as ma
+import hyphen as hp
+from hyphen import Hyphenator
+import sklearn as sk
+from sklearn.linear_model import LogisticRegression as lg
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+
+# Retrieve current working directory (`cwd`)
+cwd = os.getcwd()
+cwd
+
+# Define directory 
+os.chdir("/Users/fsiano/Desktop/Fall2018/CS542/project")
+
+# Assign datsets filename
+train = 'digaai_train.csv'
+test = 'digaai_test.csv'
+
+# Load spreadsheet
+dftrain = pd.read_csv(train, converters = {'first':str})
+dftest = pd.read_csv(test, converters = {'Firstname':str})
+
+# Convert test names into lower case for consitency with training set
+dftest['Firstname'] = dftest['Firstname'].str.lower()
+
+# Drop name too long
+#dftrain = dftrain.drop(32412, axis=0) # handled afterwards with try
+
+# Create Hyphenators
+h_pt_PT = Hyphenator('pt_PT')
+h_pt_BR = Hyphenator('pt_BR')
+
+# Create Dictionary
+first_syll_train = {}
+first_syll_test = {}
+
+# Populate dictionary first name
+def syllable_dictionary(df, dictionary):
+    for word in df:
+        try:
+            for syll in h_pt_BR.syllables(word):
+                if syll not in dictionary:
+                    dictionary[syll] = 1
+                else:
+                    dictionary[syll] += 1
+        except:
+            print('too long')
+                        
+syllable_dictionary(dftrain['first'][0:], first_syll_train)
+syllable_dictionary(dftest['Firstname'][0:], first_syll_test)
+
+# Create a df with all the features
+# Need to create two: (1) train, (2) test
+dftrain_slice = pd.DataFrame(np.zeros(shape=(len(dftrain['first'][0:]),len(first_syll_train))), columns=(first_syll_train),index=dftrain['first'][0:])
+
+dftest_slice = pd.DataFrame(np.zeros(shape=(len(dftest['Firstname'][0:]),len(first_syll_train))), columns=(first_syll_train),index=dftest['Firstname'][0:])             
+
+# Populate the dataframe with dummies based on features
+def populate_df(df):
+    for entry in df.index:
+        for syll in df.columns:
+            if syll in entry:
+                df.loc[entry,syll] = 1
+                
+populate_df(dftrain_slice)
+
+populate_df(dftest_slice)
+            
+# Add the y variable
+dftrain_slice['y'] = dftrain['b_or_n'][0:].values
+#dftest['y'] = dftrain['b_or_n'][:8000].values
+            
+# Create classifier
+classifier = lg()
+
+# Create variables to be used in classification
+ncol_train = len(dftrain_slice.columns)
+X_train = dftrain_slice[dftrain_slice.columns[0:ncol_train - 1]]
+y_train = dftrain_slice[dftrain_slice.columns[ncol_train - 1]]
+
+ncol_test = len(dftest_slice.columns)
+X_test = dftest_slice[dftest_slice.columns[0:ncol_test]]
+#y_test = dftest[dftest.columns[ncol_test - 1]]
+
+# Train classifier
+classifier.fit(X_train, y_train)
+
+# Predict
+y_pred = classifier.predict(X_test)
+
+# Accuracy
+confusion_matrix = confusion_matrix(y_test, y_pred)
+print(confusion_matrix)
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(classifier.score(X_test, y_test)))
+print(classification_report(y_test, y_pred))
+
+# Write .csv file for Kaggle submission
+X_test.to_csv('design_matrix_test.csv', sep=',',encoding='utf-8')
+np.savetxt('prediction_test.csv', y_pred, delimiter=',')
+
+###############################################################################
+##### Data Estraction for RNN - Yafei and Runze ####
+#
+##### Training Set ####
+#
+#split_train = pd.DataFrame(np.zeros(shape=(len(dftrain['first']),1)))
+#
+#for i in range(len(dftrain['first'])):
+#    try:
+#        split_train[0][i] = h_pt_BR.syllables(dftrain['first'][i])
+#    except:
+#        print('too long')
+#
+#for i in range(len(split_train)):
+#    if split_train[0][i] == []:
+#        split_train[0][i] = [dftrain['first'][i]]
+#
+#split_train.columns = ['split']
+#
+##### Write to .csv ####
+#import csv
+#split_train.to_csv('train_split.csv', sep=',',encoding='utf-8')
+#
+##### Test Set ####
+#
+#split_test = pd.DataFrame(np.zeros(shape=(len(dftest['Firstname']),1)))
+#
+#for i in range(len(dftest['Firstname'])):
+#    try:
+#        split_test[0][i] = h_pt_BR.syllables(dftest['Firstname'][i])
+#    except:
+#        print('too long')
+#
+#for i in range(len(split_test)):
+#    if split_test[0][i] == []:
+#        split_test[0][i] = [dftest['Firstname'][i]]
+#
+#split_test.columns = ['split']
+#
+##### Write to .csv ####
+#split_test.to_csv('test_split.csv', sep=',',encoding='utf-8')
+#
+### Write Dictionary to CSV #
+#
+#import csv
+#
+#dict = first_syll_train
+#w = csv.writer(open("syll_dict_train.csv", "w"))
+#for key, val in dict.items():
+#    w.writerow([key, val])
+#    
+#dict = first_syll_test
+#w = csv.writer(open("syll_dict_test.csv", "w"))
+#for key, val in dict.items():
+#    w.writerow([key, val])
+############################################################################### 
